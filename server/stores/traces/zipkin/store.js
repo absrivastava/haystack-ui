@@ -16,10 +16,12 @@
 
 const axios = require('axios');
 const Q = require('q');
+const restRequest = require('request');
+
 const config = require('../../../config/config');
 const converter = require('./converter');
 const rangeConverter = require('../../utils/rangeConverter');
-const errorConverter = require('../../utils/errorConverter');
+const responseConverter = require('../../utils/responseConverter');
 
 const store = {};
 const baseZipkinUrl = config.stores.traces.zipkinUrl;
@@ -53,10 +55,16 @@ function mapQueryParams(query) {
 
 store.getServices = () => {
     const deferred = Q.defer();
-    axios
-        .get(`${baseZipkinUrl}/services`)
-        .then(response => deferred.resolve(response.data),
-            error => deferred.reject(errorConverter.fromAxiosError(error)));
+
+    restRequest.get(`${baseZipkinUrl}/services`,
+        {timeout: config.upstreamTimeout},
+        (error, response, body) => {
+            if (responseConverter.isError(error, response)) {
+                responseConverter.handleError(error, response, deferred);
+            } else {
+                deferred.resolve(body);
+            }
+        });
 
     return deferred.promise;
 };
@@ -67,7 +75,7 @@ store.getOperations = (serviceName) => {
     axios
         .get(`${baseZipkinUrl}/spans?serviceName=${serviceName}`)
         .then(response => deferred.resolve(response.data),
-            error => deferred.reject(errorConverter.fromAxiosError(error)));
+            error => deferred.reject(responseConverter.fromAxiosError(error)));
 
     return deferred.promise;
 };
@@ -78,7 +86,7 @@ store.getTrace = (traceId) => {
     axios
         .get(`${baseZipkinUrl}/trace/${traceId}`)
         .then(response => deferred.resolve(converter.toHaystackTrace(response.data)),
-            error => deferred.reject(errorConverter.fromAxiosError(error)));
+            error => deferred.reject(responseConverter.fromAxiosError(error)));
 
     return deferred.promise;
 };
@@ -91,14 +99,14 @@ store.findTraces = (query) => {
         axios
             .get(`${baseZipkinUrl}/trace/${query.traceId}`)
             .then(response => deferred.resolve(converter.toHaystackSearchResult([response.data], query)),
-                error => deferred.reject(errorConverter.fromAxiosError(error)));
+                error => deferred.reject(responseConverter.fromAxiosError(error)));
     } else {
         const queryUrl = mapQueryParams(query);
 
         axios
             .get(`${baseZipkinUrl}/traces?${queryUrl}`)
             .then(response => deferred.resolve(converter.toHaystackSearchResult(response.data, query)),
-                error => deferred.reject(errorConverter.fromAxiosError(error)));
+                error => deferred.reject(responseConverter.fromAxiosError(error)));
     }
 
     return deferred.promise;

@@ -18,4 +18,14 @@ const converter = {};
 
 converter.fromAxiosError = error => new Error(`${error} ${JSON.stringify(error.config)}`);
 
+converter.isError = (error, response) => error || response.statusCode > 399;
+
+converter.handleError = (error, response, deferred) => {
+    if (error) {
+        deferred.reject(new Error(JSON.stringify(error)));
+    } else if (response.statusCode > 399) {
+        deferred.reject(new Error(JSON.stringify(response)));
+    }
+};
+
 module.exports = converter;
